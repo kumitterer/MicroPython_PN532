@@ -17,23 +17,22 @@ using UART.
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_PN532.git"
 
+from machine import UART, Pin
+
 try:
-    from typing import Optional
-    from circuitpython_typing import ReadableBuffer
-    from digitalio import DigitalInOut
-    from busio import UART
+    from typing import Optional, Union
 except ImportError:
     pass
 
 import time
-from adafruit_pn532.adafruit_pn532 import PN532, BusyError
+from pn532.pn532 import PN532, BusyError
 
 
 class PN532_UART(PN532):
     """Driver for the PN532 connected over Serial UART"""
 
     def __init__(
-        self, uart: UART, *, reset: Optional[DigitalInOut] = None, debug: bool = False
+        self, uart: UART, *, reset: Optional[int] = None, debug: bool = False
     ) -> None:
         """Create an instance of the PN532 class using Serial connection.
         Optional reset pin and debugging output.
@@ -47,18 +46,12 @@ class PN532_UART(PN532):
             Here is an example of using the :class:`PN532_I2C` class.
             First you will need to import the libraries to use the sensor
 
-            .. code-block:: python
-
-                import board
-                import busio
-                from digitalio import DigitalInOut
-                from adafruit_pn532.uart import PN532_UART
-
-            Once this is done you can define your `busio.UART` object and define your PN532 object
+            Once this is done you can define your `machine.UART` object and define your PN532 object
 
             .. code-block:: python
 
-                uart = busio.UART(board.TX, board.RX, baudrate=115200, timeout=0.1)
+                uart = machine.UART(0)
+                uart.init(baudrate=115200, bits=8, parity=None, stop=1, tx=0, rx=1)
                 pn532 = PN532_UART(uart, debug=False)
 
             Now you have access to the attributes and functions of the PN532 RFID/NFC
@@ -103,7 +96,7 @@ class PN532_UART(PN532):
             print("Reading: ", [hex(i) for i in frame])
         return frame
 
-    def _write_data(self, framebytes: ReadableBuffer) -> None:
+    def _write_data(self, framebytes: Union[bytes, bytearray]) -> None:
         """Write a specified count of bytes to the PN532"""
         self._uart.reset_input_buffer()
         self._uart.write(framebytes)

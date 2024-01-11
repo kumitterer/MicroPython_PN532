@@ -18,15 +18,12 @@ __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_PN532.git"
 
 import time
-from adafruit_bus_device import i2c_device
-from digitalio import Direction
+from machine import I2C, Pin
 from micropython import const
-from adafruit_pn532.adafruit_pn532 import PN532, BusyError
+from pn532.pn532 import PN532, BusyError
 
 try:
-    from typing import Optional
-    from digitalio import DigitalInOut  # pylint: disable=ungrouped-imports
-    from busio import I2C
+    from typing import Optional, Union
 except ImportError:
     pass
 
@@ -62,23 +59,12 @@ class PN532_I2C(PN532):
             Here is an example of using the :class:`PN532_I2C` class.
             First you will need to import the libraries to use the sensor
 
-            .. code-block:: python
-
-                import board
-                import busio
-                from digitalio import DigitalInOut
-                from adafruit_pn532.i2c import PN532_I2C
-
             Once this is done you can define your `board.I2C` object and define your object
 
             .. code-block:: python
 
-                i2c = busio.I2C(board.SCL, board.SDA)
-                reset_pin = DigitalInOut(board.D6)
-                # On Raspberry Pi, you must also connect a pin to P32 "H_Request" for hardware
-                # wakeup! this means we don't need to do the I2C clock-stretch thing
-                req_pin = DigitalInOut(board.D12)
-                pn532 = PN532_I2C(i2c, debug=False, reset=reset_pin, req=req_pin)
+                i2c = machine.I2C(0, scl=SCL_PIN, sda=SDA_PIN)
+                pn532 = PN532_I2C(i2c, debug=False, reset=RESET_PIN, req=REQ_PIN)
                 # Configure PN532 to communicate with MiFare cards
                 pn532.SAM_configuration()
 
@@ -92,7 +78,7 @@ class PN532_I2C(PN532):
         """
         self.debug = debug
         self._req = req
-        self._i2c = i2c_device.I2CDevice(i2c, address)
+        self._i2c = i2c
         super().__init__(debug=debug, irq=irq, reset=reset)
 
     def _wakeup(self) -> None:
@@ -102,9 +88,9 @@ class PN532_I2C(PN532):
             time.sleep(0.01)
         if self._req:
             self._req.direction = Direction.OUTPUT
-            self._req.value = False
+            self._req.value(False)
             time.sleep(0.01)
-            self._req.value = True
+            self._req.value(True)
             time.sleep(0.01)
         self.low_power = False
         self.SAM_configuration()  # Put the PN532 back in normal mode
@@ -116,7 +102,7 @@ class PN532_I2C(PN532):
         while (time.monotonic() - timestamp) < timeout:
             try:
                 with self._i2c:
-                    self._i2c.readinto(status)
+                    self._i2c.readfrom_into(address, status)
             except OSError:
                 continue
             if status == b"\x01":
@@ -130,10 +116,10 @@ class PN532_I2C(PN532):
         # Build a read request frame.
         frame = bytearray(count + 1)
         with self._i2c as i2c:
-            i2c.readinto(frame, end=1)  # read status byte!
+            i2c.readfrom_into(address, frame, stop=1)  # read status byte!
             if frame[0] != 0x01:  # not ready
                 raise BusyError
-            i2c.readinto(frame)  # ok get the data, plus statusbyte
+            i2c.readfrom_into(address, frame)  # ok get the data, plus statusbyte
         if self.debug:
             print("Reading: ", [hex(i) for i in frame[1:]])
         return frame[1:]  # don't return the status byte
@@ -141,4 +127,4 @@ class PN532_I2C(PN532):
     def _write_data(self, framebytes: bytes) -> None:
         """Write a specified count of bytes to the PN532"""
         with self._i2c as i2c:
-            i2c.write(framebytes)
+            i2c.writeto(address, framebytes)

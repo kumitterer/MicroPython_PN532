@@ -28,19 +28,17 @@ Implementation Notes
 
 import time
 import struct
-from digitalio import Direction
 from micropython import const
+from machine import Pin
 
 try:
     from typing import Optional, Tuple, Union
     from typing_extensions import Literal
-    from circuitpython_typing import ReadableBuffer
-    from digitalio import DigitalInOut  # pylint: disable=ungrouped-imports
 except ImportError:
     pass
 
-__version__ = "0.0.0+auto.0"
-__repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_PN532.git"
+__version__ = "0.0.0+micropython.0"
+__repo__ = "https://kumig.it/kumitterer/MicroPython_PN532"
 
 _PREAMBLE = const(0x00)
 _STARTCODE1 = const(0x00)
@@ -163,14 +161,14 @@ class PN532:
         self,
         *,
         debug: bool = False,
-        irq: Optional[DigitalInOut] = None,
-        reset: Optional[DigitalInOut] = None,
+        irq: int = None,
+        reset: int = None,
     ) -> None:
         """Create an instance of the PN532 class"""
         self.low_power = True
         self.debug = debug
-        self._irq = irq
-        self._reset_pin = reset
+        self._irq = Pin(irq, Pin.IN) if irq else None
+        self._reset_pin = Pin(reset, Pin.OUT) if reset else None
         self.reset()
         _ = self.firmware_version
 
@@ -198,10 +196,10 @@ class PN532:
         if self._reset_pin:
             if self.debug:
                 print("Resetting")
-            self._reset_pin.direction = Direction.OUTPUT
-            self._reset_pin.value = False
+
+            self._reset_pin.value(False)
             time.sleep(0.1)
-            self._reset_pin.value = True
+            self._reset_pin.value(True)
             time.sleep(0.1)
         self._wakeup()
 
@@ -274,7 +272,7 @@ class PN532:
         self,
         command: int,
         response_length: int = 0,
-        params: ReadableBuffer = b"",
+        params: Union[bytes, bytearray] = b"",
         timeout: float = 1,
     ) -> Optional[Union[bytes, bytearray]]:
         """Send specified command to the PN532 and expect up to response_length
@@ -291,7 +289,7 @@ class PN532:
         )
 
     def send_command(
-        self, command: int, params: ReadableBuffer = b"", timeout: float = 1
+        self, command: int, params: Union[bytes, bytearray] = b"", timeout: float = 1
     ) -> bool:
         """Send specified command to the PN532 and wait for an acknowledgment.
         Will wait up to timeout seconds for the acknowledgment and return True.
@@ -343,7 +341,7 @@ class PN532:
         instead. Returns True if the PN532 was powered down successfully or
         False if not."""
         if self._reset_pin:  # Hard Power Down if the reset pin is connected
-            self._reset_pin.value = False
+            self._reset_pin.value(False)
             self.low_power = True
         else:
             # Soft Power Down otherwise. Enable wakeup on I2C, SPI, UART
@@ -432,10 +430,10 @@ class PN532:
 
     def mifare_classic_authenticate_block(  # pylint: disable=invalid-name
         self,
-        uid: ReadableBuffer,
+        uid: Union[bytes, bytearray],
         block_number: int,
         key_number: Literal[0x60, 0x61],
-        key: ReadableBuffer,
+        key: Union[bytes, bytearray],
     ) -> bool:
         """Authenticate specified block number for a MiFare classic card.  Uid
         should be a byte array with the UID of the card, block number should be
@@ -480,7 +478,7 @@ class PN532:
         return response[1:]
 
     def mifare_classic_write_block(
-        self, block_number: int, data: ReadableBuffer
+        self, block_number: int, data: Union[bytes, bytearray]
     ) -> bool:
         """Write a block of data to the card.  Block number should be the block
         to write and data should be a byte array of length 16 with the data to
@@ -597,7 +595,9 @@ class PN532:
 
         return self.mifare_classic_write_block(block_number, data)
 
-    def ntag2xx_write_block(self, block_number: int, data: ReadableBuffer) -> bool:
+    def ntag2xx_write_block(
+        self, block_number: int, data: Union[bytes, bytearray]
+    ) -> bool:
         """Write a block of data to the card.  Block number should be the block
         to write and data should be a byte array of length 4 with the data to
         write.  If the data is successfully written then True is returned,

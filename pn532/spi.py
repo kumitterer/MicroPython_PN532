@@ -14,21 +14,19 @@ using SPI.
 
 """
 
+import time
+from machine import Pin, SPI
+from micropython import const
+
 try:
-    from typing import Optional
-    from circuitpython_typing import ReadableBuffer
-    from digitalio import DigitalInOut
-    from busio import SPI
+    from typing import Optional, Union
 except ImportError:
     pass
 
+from pn532 import PN532
+
 __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_PN532.git"
-
-import time
-from adafruit_bus_device import spi_device
-from micropython import const
-from adafruit_pn532.adafruit_pn532 import PN532
 
 _SPI_STATREAD = const(0x02)
 _SPI_DATAWRITE = const(0x01)
@@ -55,10 +53,10 @@ class PN532_SPI(PN532):
     def __init__(
         self,
         spi: SPI,
-        cs_pin: DigitalInOut,
+        cs_pin: int,
         *,
-        irq: Optional[DigitalInOut] = None,
-        reset: Optional[DigitalInOut] = None,
+        irq: Optional[int] = None,
+        reset: Optional[int] = None,
         debug: bool = False
     ) -> None:
         """Create an instance of the PN532 class using SPI
@@ -75,19 +73,12 @@ class PN532_SPI(PN532):
         Here is an example of using the :class:`PN532_SPI` class.
         First you will need to import the libraries to use the sensor
 
-        .. code-block:: python
-
-            import board
-            import busio
-            from digitalio import DigitalInOut
-            from adafruit_pn532.spi import PN532_SPI
-
-        Once this is done you can define your `busio.SPI` object and define your PN532 object
+        Once this is done you can define your `machine.SPI` object and define your PN532 object
 
         .. code-block:: python
 
-            spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-            cs_pin = DigitalInOut(board.D5)
+            spi = machine.SoftSPI(sck=board.SCK, mosi=board.MOSI, miso=board.MISO)
+            cs_pin = 23 # probably not 23...
             pn532 = PN532_SPI(spi, cs_pin, debug=False)
 
         Now you have access to the attributes and functions of the PN532 RFID/NFC
@@ -105,7 +96,7 @@ class PN532_SPI(PN532):
     def _wakeup(self) -> None:
         """Send any special commands/data to wake up PN532"""
         if self._reset_pin:
-            self._reset_pin.value = True
+            self._reset_pin.value(True)
             time.sleep(0.01)
         with self._spi as spi:
             spi.write(bytearray([0x00]))  # pylint: disable=no-member
@@ -144,7 +135,7 @@ class PN532_SPI(PN532):
             print("Reading: ", [hex(i) for i in frame[1:]])
         return frame[1:]
 
-    def _write_data(self, framebytes: ReadableBuffer) -> None:
+    def _write_data(self, framebytes: Union[bytes, bytearray]) -> None:
         """Write a specified count of bytes to the PN532"""
         # start by making a frame with data write in front,
         # then rest of bytes, and LSBify it
